@@ -8,11 +8,18 @@ import java.util.Random;
  * @author 向前走不回头
  * @date 2021/7/24
  */
-public class RandomLoadBalance implements LoadBalance{
+public class RandomLoadBalance extends AbstractLoadBalance{
     private final Random random = new Random();
     @Override
-    public InetSocketAddress selectServiceAddress(List<InetSocketAddress> serviceAddress) {
+    public InetSocketAddress doSelect(List<InetSocketAddress> serviceAddress) {
         int index = random.nextInt(serviceAddress.size());
         return serviceAddress.get(index);
+    }
+    static class Holder{
+        private static final RandomLoadBalance INSTANCE = new RandomLoadBalance();
+    }
+
+    public static RandomLoadBalance getInstance() {
+        return Holder.INSTANCE;
     }
 }

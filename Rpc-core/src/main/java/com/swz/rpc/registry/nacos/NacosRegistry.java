@@ -42,7 +42,7 @@ public class NacosRegistry implements Registry {
     private NacosRegistry() {
         serviceMap = new ConcurrentHashMap<>();
         registeredService = ConcurrentHashMap.newKeySet();
-        loadBalance = new RandomLoadBalance();
+        loadBalance = RandomLoadBalance.getInstance();
     }
 
     @Override
