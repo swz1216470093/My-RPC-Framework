@@ -11,8 +11,5 @@ import com.swz.rpc.transport.socket.SocketServer;
 public class ServerTest {
     public static void main(String[] args) {
         new RpcServerStarter(new NettyServer()).start("com.swz.server");
-//        final SocketServer socketServer = new SocketServer();
-//        socketServer.scanPackage("com.swz.server");
-//        socketServer.start();
     }
 }
