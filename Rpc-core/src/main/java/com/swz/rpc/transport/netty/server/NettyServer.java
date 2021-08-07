@@ -1,8 +1,10 @@
 package com.swz.rpc.transport.netty.server;
 
 import com.swz.rpc.annotation.RpcService;
+import com.swz.rpc.config.RpcConfig;
 import com.swz.rpc.registry.Registry;
 import com.swz.rpc.registry.nacos.NacosRegistry;
+import com.swz.rpc.transport.RpcServer;
 import com.swz.rpc.transport.netty.handler.ServerHandler;
 import com.swz.rpc.transport.netty.protocol.ProtocolDecoder;
 import com.swz.rpc.transport.netty.protocol.MessageCodec;
@@ -31,12 +33,7 @@ import java.util.concurrent.TimeUnit;
  * @date 2021/7/23
  */
 @Slf4j
-public class NettyServer {
-    private final Registry registry;
-    public NettyServer(){
-        registry = NacosRegistry.getInstance();
-    }
-    public static final int PORT = 9090;
+public class NettyServer implements RpcServer {
     public void start(){
         NioEventLoopGroup boss = new NioEventLoopGroup();
         NioEventLoopGroup worker = new NioEventLoopGroup();
@@ -63,7 +60,7 @@ public class NettyServer {
                     }
                 });
         try {
-            serverBootstrap.bind(PORT)
+            serverBootstrap.bind(RpcConfig.PORT)
                     .sync()
                     .channel()
                     .closeFuture()
@@ -78,18 +75,4 @@ public class NettyServer {
         }
     }
 
-    public void scanPackage(String basePackage){
-        Reflections reflections = new Reflections(basePackage);
-        Set<Class<?>> rpcServiceClass = reflections.getTypesAnnotatedWith(RpcService.class);
-//        找到所有标记了RpcService注解的类
-//        将他们注册到注册中心
-        for (Class<?> serviceClass : rpcServiceClass) {
-            try {
-                Object service = serviceClass.newInstance();
-                registry.registerService(service, serviceClass.getInterfaces()[0].getName(),new InetSocketAddress(InetAddress.getLocalHost(),PORT));
-            } catch (InstantiationException | IllegalAccessException | UnknownHostException e) {
-                e.printStackTrace();
-            }
-        }
-    }
 }

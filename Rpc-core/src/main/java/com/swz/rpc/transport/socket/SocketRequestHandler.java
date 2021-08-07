@@ -1,5 +1,7 @@
 package com.swz.rpc.transport.socket;
 
+import com.swz.rpc.container.BeanContainer;
+import com.swz.rpc.container.utils.ClassUtils;
 import com.swz.rpc.exception.RpcException;
 import com.swz.rpc.pojo.RequestMessage;
 import com.swz.rpc.pojo.ResponseMessage;
@@ -19,18 +21,19 @@ import java.net.Socket;
 @Slf4j
 public class SocketRequestHandler implements Runnable{
     private final Socket socket;
-    private final Registry registry;
+    private final BeanContainer beanContainer;
     public SocketRequestHandler(Socket socket) {
         this.socket = socket;
-        this.registry = NacosRegistry.getInstance();
+        this.beanContainer = BeanContainer.getInstance();
     }
     @Override
     public void run() {
         try ( ObjectInputStream ois = new ObjectInputStream(socket.getInputStream());
               ObjectOutputStream oos = new ObjectOutputStream(socket.getOutputStream())){
             RequestMessage requestMessage = (RequestMessage) ois.readObject();
-            //从注册中心找到服务对象 反射调用请求的方法 用响应消息包装返回值
-            Object service = registry.getService(requestMessage.getInterfaceName());
+            //从容器中找到服务对象 反射调用请求的方法 用响应消息包装返回值
+            Class<?> interfaceClass = ClassUtils.loadClass(requestMessage.getInterfaceName());
+            Object service = beanContainer.getBean(interfaceClass);
             ResponseMessage responseMessage = new ResponseMessage();
             try {
                 Method method = service.getClass().getMethod(requestMessage.getMethodName(), requestMessage.getParameterTypes());

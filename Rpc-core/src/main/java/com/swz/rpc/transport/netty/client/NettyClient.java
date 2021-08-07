@@ -115,18 +115,7 @@ public class NettyClient implements RpcTransport {
                     log.error("Send failed:", channelFuture.cause());
                 }
             });
-            try {
-                promise.await();
-            } catch (InterruptedException e) {
-                throw new RpcException("等待远程调用结果时异常 " + e.getMessage());
-            }
-            if (promise.isSuccess()) {
-//                调用正常
-                return promise.getNow();
-            } else {
-//                调用异常
-                throw new RpcException(promise.cause());
-            }
+           return promise;
         } else {
             throw new IllegalStateException();
         }

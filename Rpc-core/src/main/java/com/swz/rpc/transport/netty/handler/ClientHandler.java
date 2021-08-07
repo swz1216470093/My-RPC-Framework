@@ -51,4 +51,11 @@ public class ClientHandler extends SimpleChannelInboundHandler<Message> {
             super.userEventTriggered(ctx, evt);
         }
     }
+
+    @Override
+    public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
+        log.error("client catch exception：", cause);
+        cause.printStackTrace();
+        ctx.close();
+    }
 }

@@ -3,6 +3,9 @@ package com.swz.rpc.registry.nacos;
 import com.alibaba.nacos.api.exception.NacosException;
 import com.alibaba.nacos.api.naming.NamingFactory;
 import com.alibaba.nacos.api.naming.NamingService;
+import com.alibaba.nacos.api.naming.listener.Event;
+import com.alibaba.nacos.api.naming.listener.EventListener;
+import com.alibaba.nacos.api.naming.listener.NamingEvent;
 import com.alibaba.nacos.api.naming.pojo.Instance;
 import com.swz.rpc.exception.RpcException;
 import com.swz.rpc.loadbalance.LoadBalance;
@@ -20,8 +23,8 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 @Slf4j
 public class NacosRegistry implements Registry {
-    private final Map<String, Object> serviceMap;
     private final Set<String> registeredService;
+    private final Map<String ,List<Instance>> serviceInstanceCache;
     private static final String SERVER_ADDR = "127.0.0.1:8849";
     private static final NamingService namingService;
     private final LoadBalance loadBalance;
@@ -40,14 +43,13 @@ public class NacosRegistry implements Registry {
     }
 
     private NacosRegistry() {
-        serviceMap = new ConcurrentHashMap<>();
         registeredService = ConcurrentHashMap.newKeySet();
         loadBalance = RandomLoadBalance.getInstance();
+        serviceInstanceCache = new ConcurrentHashMap<>();
     }
 
     @Override
-    public void registerService(Object service, String serviceName, InetSocketAddress address) {
-        serviceMap.put(serviceName,service);
+    public void registerService(String serviceName, InetSocketAddress address) {
         registeredService.add(serviceName);
         Instance instance = new Instance();
         instance.setPort(address.getPort());
@@ -55,11 +57,28 @@ public class NacosRegistry implements Registry {
         instance.setServiceName(serviceName);
         try {
             namingService.registerInstance(serviceName,instance);
+            subscribe(serviceName);
         } catch (NacosException e) {
             log.debug("注册服务时出错" + e.getMessage());
         }
     }
 
+    public void subscribe(String serviceName){
+        try {
+            namingService.subscribe(serviceName, event -> {
+                if (event instanceof NamingEvent){
+                    final List<Instance> instances = ((NamingEvent) event).getInstances();
+                    if (instances == null || instances.isEmpty()){
+                        serviceInstanceCache.remove(serviceName);
+                    }else{
+                        serviceInstanceCache.put(serviceName,instances);
+                    }
+                }
+            });
+        } catch (NacosException e) {
+            log.debug("订阅服务时出错" + e.getMessage());
+        }
+    }
     @Override
     public InetSocketAddress lookupServiceAddress(String serviceName) {
         try {
@@ -71,7 +90,12 @@ public class NacosRegistry implements Registry {
     }
 
     private List<InetSocketAddress> getServiceAddress(String serviceName) throws NacosException {
-        List<Instance> instances = namingService.getAllInstances(serviceName);
+        final List<Instance> instances;
+        if (serviceInstanceCache.get(serviceName) != null){
+            instances = serviceInstanceCache.get(serviceName);
+        }else {
+            instances = namingService.getAllInstances(serviceName);
+        }
         List<InetSocketAddress> addresses =  new ArrayList<>();
         for (Instance instance : instances) {
             addresses.add(new InetSocketAddress(instance.getIp(), instance.getPort()));
@@ -79,14 +103,6 @@ public class NacosRegistry implements Registry {
         return addresses;
     }
 
-    @Override
-    public Object getService(String serviceName){
-        Object service = serviceMap.get(serviceName);
-        if (null == service) {
-            throw new RpcException("服务未找到");
-        }
-        return service;
-    }
 
     static class Holder{
         private static final NacosRegistry INSTANCE = new NacosRegistry();

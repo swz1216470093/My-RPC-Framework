@@ -2,7 +2,7 @@ package com.swz.client;
 
 import com.swz.api.HelloService;
 import com.swz.rpc.annotation.RpcComponent;
-import com.swz.rpc.annotation.RpcResource;
+import com.swz.rpc.annotation.RpcAutowired;
 
 /**
  * todo:实现依赖注入 将helloService的代理对象注入到helloService成员变量中
@@ -11,10 +11,10 @@ import com.swz.rpc.annotation.RpcResource;
  */
 @RpcComponent
 public class HelloController {
-    @RpcResource
+    @RpcAutowired
     HelloService helloService;
 
     public void test() {
-        helloService.say("rpc");
+        System.out.println(helloService.say("rpc"));
     }
 }

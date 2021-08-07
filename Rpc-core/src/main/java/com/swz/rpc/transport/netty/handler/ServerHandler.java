@@ -1,5 +1,7 @@
 package com.swz.rpc.transport.netty.handler;
 
+import com.swz.rpc.container.BeanContainer;
+import com.swz.rpc.container.utils.ClassUtils;
 import com.swz.rpc.exception.RpcException;
 import com.swz.rpc.pojo.Message;
 import com.swz.rpc.pojo.PongMessage;
@@ -16,6 +18,7 @@ import lombok.extern.slf4j.Slf4j;
 
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.util.Set;
 
 
 /**
@@ -24,10 +27,10 @@ import java.lang.reflect.Method;
  */
 @Slf4j
 public class ServerHandler extends SimpleChannelInboundHandler<Message> {
-    private final Registry registry;
+    private final BeanContainer container;
 
     public ServerHandler(){
-        registry = NacosRegistry.getInstance();
+        container = BeanContainer.getInstance();
     }
 
     @Override
@@ -42,15 +45,21 @@ public class ServerHandler extends SimpleChannelInboundHandler<Message> {
             responseMessage.setCodec(requestMessage.getCodec());
             responseMessage.setRequestId(requestMessage.getRequestId());
             if (ctx.channel().isActive() && ctx.channel().isWritable()){
-                //从注册中心找到服务对象 反射调用请求的方法 用响应消息包装返回值
-                Object service = registry.getService(requestMessage.getInterfaceName());
+                //从容器中找到服务对象 反射调用请求的方法 用响应消息包装返回值
+                Class<?> interfaceClass = ClassUtils.loadClass(requestMessage.getInterfaceName());
+                Set<Class<?>> classesBySuper = container.getClassesBySuper(interfaceClass);
+                if (classesBySuper == null || classesBySuper.size() > 1 ) {
+//                   未找到实现类或存在多个实现类
+                    throw new RpcException("未找到实现类或存在多个实现类");
+                }
+                Object service = container.getBean(classesBySuper.iterator().next());
                 try {
                     Method method = service.getClass().getMethod(requestMessage.getMethodName(), requestMessage.getParameterTypes());
                     Object returnValue = method.invoke(service, requestMessage.getParameterValue());
                     responseMessage.setReturnValue(returnValue);
                 } catch (NoSuchMethodException | InvocationTargetException | IllegalAccessException e) {
-                    log.debug("远程调用出错");
-                    responseMessage.setExceptionValue(new RpcException("远程调用出错"+e.getMessage()));
+                    log.error("远程调用出错",e);
+                    responseMessage.setExceptionValue(new RpcException("远程调用出错"+e.getCause().getMessage()));
                 }
             }else {
                 log.error("当前Channel不可写，丢弃消息");
@@ -71,5 +80,12 @@ public class ServerHandler extends SimpleChannelInboundHandler<Message> {
             }
         }
         super.userEventTriggered(ctx, evt);
+    }
+
+    @Override
+    public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
+        log.error("server catch exception：", cause);
+        cause.printStackTrace();
+        ctx.close();
     }
 }

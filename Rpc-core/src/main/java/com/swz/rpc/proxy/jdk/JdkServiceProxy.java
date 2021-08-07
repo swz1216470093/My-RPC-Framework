@@ -1,10 +1,12 @@
 package com.swz.rpc.proxy.jdk;
 
+import com.swz.rpc.exception.RpcException;
 import com.swz.rpc.pojo.RequestMessage;
 import com.swz.rpc.proxy.ServiceProxy;
 import com.swz.rpc.transport.RpcTransport;
 import com.swz.rpc.transport.netty.client.NettyClient;
 import io.netty.util.concurrent.Promise;
+import lombok.extern.slf4j.Slf4j;
 
 import java.lang.reflect.Proxy;
 import java.util.UUID;
@@ -13,6 +15,7 @@ import java.util.UUID;
  * @author 向前走不回头
  * @date 2021/7/24
  */
+@Slf4j
 public class JdkServiceProxy implements ServiceProxy {
     private final RpcTransport rpcTransport;
 
@@ -33,7 +36,19 @@ public class JdkServiceProxy implements ServiceProxy {
                     method.getName(),
                     method.getParameterTypes(),
                     args);
-            return rpcTransport.sendRpcRequest(requestMessage);
+            Promise<Object> promise = (Promise<Object>) rpcTransport.sendRpcRequest(requestMessage);
+            try {
+                promise.await();
+            } catch (InterruptedException e) {
+                throw new RpcException("等待远程调用结果时异常 " + e.getMessage());
+            }
+            if (promise.isSuccess()) {
+//                调用正常
+                return promise.getNow();
+            } else {
+//                调用异常
+                throw new RpcException(promise.cause());
+            }
         });
     }
 }
