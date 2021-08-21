@@ -10,6 +10,7 @@ import com.swz.rpc.transport.RpcServer;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.UnknownHostException;
+import java.util.ServiceLoader;
 import java.util.Set;
 
 /**
@@ -22,7 +23,7 @@ public class RpcServerStarter {
     private final RpcServer rpcServer;
 
     public RpcServerStarter(RpcServer rpcServer) {
-        registry = NacosRegistry.getInstance();
+        registry = ServiceLoader.load(Registry.class).iterator().next();
         this.rpcServer = rpcServer;
     }
 

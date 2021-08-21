@@ -1,13 +1,9 @@
 package com.swz.rpc;
 
-import com.swz.rpc.annotation.RpcService;
+
 import com.swz.rpc.container.BeanContainer;
 import com.swz.rpc.container.DependencyInjector;
-import com.swz.rpc.proxy.ServiceProxy;
-import com.swz.rpc.proxy.jdk.JdkServiceProxy;
-import com.swz.rpc.transport.RpcTransport;
 
-import java.util.Set;
 
 /**
  * @author 向前走不回头
@@ -15,16 +11,19 @@ import java.util.Set;
  */
 public class RpcClientStarter {
     private boolean isStart;
-    private BeanContainer beanContainer;
-    public RpcClientStarter(){
+    private final BeanContainer beanContainer;
+
+    public RpcClientStarter() {
         beanContainer = BeanContainer.getInstance();
     }
-    public void start(String basePackage){
-        if (isStart){
+
+    public void start(String basePackage) {
+        if (isStart) {
             return;
         }
 //        加载bean
         beanContainer.loadBeans(basePackage);
+        //依赖注入
         new DependencyInjector().doIoc();
         isStart = true;
     }

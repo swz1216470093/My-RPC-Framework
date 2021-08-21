@@ -22,6 +22,7 @@ import lombok.extern.slf4j.Slf4j;
 
 import java.net.InetSocketAddress;
 import java.util.Map;
+import java.util.ServiceLoader;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
@@ -39,7 +40,7 @@ public class NettyClient implements RpcTransport {
     private final ChannelProvider channelProvider;
 
     public NettyClient() {
-        registry = NacosRegistry.getInstance();
+        registry = ServiceLoader.load(Registry.class).iterator().next();
         channelProvider = ChannelProvider.getInstance();
         bootstrap = new Bootstrap();
         NioEventLoopGroup group = new NioEventLoopGroup();
@@ -104,7 +105,7 @@ public class NettyClient implements RpcTransport {
         Channel channel = getChannel(address);
         log.debug("channel{}", channel.toString());
         if (channel.isActive()) {
-            DefaultPromise<Object> promise = new DefaultPromise<>(channel.eventLoop());
+            Promise<Object> promise = new DefaultPromise<>(channel.eventLoop());
             UnProcessRequest.getInstance().put(requestMessage.getRequestId(), promise);
             channel.writeAndFlush(requestMessage).addListener((ChannelFutureListener) channelFuture -> {
                 if (channelFuture.isSuccess()) {

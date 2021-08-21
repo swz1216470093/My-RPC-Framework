@@ -42,9 +42,9 @@ public class NacosRegistry implements Registry {
         }
     }
 
-    private NacosRegistry() {
+    public NacosRegistry() {
         registeredService = ConcurrentHashMap.newKeySet();
-        loadBalance = RandomLoadBalance.getInstance();
+        loadBalance = ServiceLoader.load(LoadBalance.class).iterator().next();
         serviceInstanceCache = new ConcurrentHashMap<>();
     }
 
@@ -103,12 +103,4 @@ public class NacosRegistry implements Registry {
         return addresses;
     }
 
-
-    static class Holder{
-        private static final NacosRegistry INSTANCE = new NacosRegistry();
-    }
-
-    public static NacosRegistry getInstance() {
-        return Holder.INSTANCE;
-    }
 }

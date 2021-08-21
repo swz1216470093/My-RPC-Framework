@@ -10,6 +10,7 @@ import com.swz.rpc.transport.RpcTransport;
 import java.io.*;
 import java.net.InetSocketAddress;
 import java.net.Socket;
+import java.util.ServiceLoader;
 
 /**
  * @author 向前走不回头
@@ -18,7 +19,7 @@ import java.net.Socket;
 public class SocketClient implements RpcTransport {
     private final Registry registry;
     public SocketClient(){
-        registry = NacosRegistry.getInstance();
+        registry = ServiceLoader.load(Registry.class).iterator().next();
     }
     @Override
     public Object sendRpcRequest(RequestMessage requestMessage) {

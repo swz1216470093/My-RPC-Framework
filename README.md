@@ -78,11 +78,13 @@ RPC（Remote Procedure Call）全称远程过程调用，简而言之就是像�
 
 5. 实现简单容器，在容器启动时扫描加了@RpcService和@RpcComponent注解的类注册为Bean，将加了@RpcService注解的bean注册到注册中心中，对加了@RpcAutowired注解的属性完成依赖注入
 
-6. 序列化协议 本实现支持JDK和JSON序列化协议	
+6. 通过Promise与请求ID结合实现全双工通信
 
-7. 负载均衡 本实现支持随机和轮询两种策略。
+7. 序列化协议 本实现支持JDK和JSON序列化协议	
 
-8. 注册中心 本实现选用Nacos作为注册中心。
+8. 负载均衡 本实现支持随机和轮询两种策略。
+
+9. 注册中心 本实现选用Nacos作为注册中心。
 
 ## 实现
 
@@ -603,21 +605,23 @@ hello rpc
 
 ## 待完善
 
-~~1.实现依赖注入 将helloService的代理对象注入到helloService成员变量中~~
+- [x] 1.实现依赖注入 将helloService的代理对象注入到helloService成员变量中
 
 ```java
 @RpcComponent
 public class HelloController {
-    @RpcResource
-    HelloService helloService;
+   @RpcResource
+   HelloService helloService;
 
-    public void test() {
-        helloService.say("rpc");
-    }
+   public void test() {
+      helloService.say("rpc");
+   }
 }
 ```
 
-~~2.整合Spring，在spring启动时扫描加了@RpcService和@RpcComponent注解的类注册为Bean 通过spring的SpringBeanPostProcessor将加了@RpcService注解的bean注册到注册中心中，对加了@RpcResource注解的属性完成依赖注入~~
+- [x] 2.自己实现简单容器 在启动时扫描加了@RpcService和@RpcComponent注解的类注册为Bean，将加了@RpcService注解的bean注册到注册中心 对加了@RpcAutowired注解的属性完成依赖注入
 
-3.引入SPI机制解耦
+  ~~2.整合Spring，在spring启动时扫描加了@RpcService和@RpcComponent注解的类注册为Bean通过spring的SpringBeanPostProcessor将加了@RpcService注解的bean注册到注册中心中，对加了@RpcResource注解的属性完成依赖注入~~
+
+- [x] 3.引入SPI机制解耦
 

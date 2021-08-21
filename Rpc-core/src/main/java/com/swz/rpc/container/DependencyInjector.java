@@ -2,10 +2,12 @@ package com.swz.rpc.container;
 
 import com.swz.rpc.annotation.RpcAutowired;
 import com.swz.rpc.container.utils.ClassUtils;
+import com.swz.rpc.proxy.ServiceProxy;
 import com.swz.rpc.proxy.jdk.JdkServiceProxy;
 import lombok.extern.slf4j.Slf4j;
 
 import java.lang.reflect.Field;
+import java.util.ServiceLoader;
 import java.util.Set;
 
 /**
@@ -18,11 +20,11 @@ public class DependencyInjector {
      * bean容器
      */
     private final BeanContainer beanContainer;
-    private final JdkServiceProxy jdkServiceProxy;
+    private final ServiceProxy serviceProxy;
 
     public DependencyInjector() {
         beanContainer = BeanContainer.getInstance();
-        jdkServiceProxy = new JdkServiceProxy();
+        serviceProxy = ServiceLoader.load(ServiceProxy.class).iterator().next();
     }
 
     public void doIoc() {
@@ -38,12 +40,10 @@ public class DependencyInjector {
                 field.setAccessible(true);
 //        找出被autowire标记的成员变量
                 if (field.isAnnotationPresent(RpcAutowired.class)) {
-                    RpcAutowired autowired = field.getAnnotation(RpcAutowired.class);
-                    String autowiredValue = autowired.value();
 //                  得到成员变量的类型
                     Class<?> fieldType = field.getType();
 //                    为这些成员变量生成代理
-                    Object proxy = jdkServiceProxy.getProxy(fieldType);
+                    Object proxy = serviceProxy.getProxy(fieldType);
                     //        获取这些成员变量的类型在容器中的实例
 //        通过反射将对应成员变量实例注入到成员变量所在类的实例里
                     Object targetBean = beanContainer.getBean(clazz);
