@@ -3,13 +3,10 @@ package com.swz.rpc.registry.nacos;
 import com.alibaba.nacos.api.exception.NacosException;
 import com.alibaba.nacos.api.naming.NamingFactory;
 import com.alibaba.nacos.api.naming.NamingService;
-import com.alibaba.nacos.api.naming.listener.Event;
-import com.alibaba.nacos.api.naming.listener.EventListener;
 import com.alibaba.nacos.api.naming.listener.NamingEvent;
 import com.alibaba.nacos.api.naming.pojo.Instance;
 import com.swz.rpc.exception.RpcException;
 import com.swz.rpc.loadbalance.LoadBalance;
-import com.swz.rpc.loadbalance.RandomLoadBalance;
 import com.swz.rpc.registry.Registry;
 import lombok.extern.slf4j.Slf4j;
 
@@ -67,7 +64,7 @@ public class NacosRegistry implements Registry {
         try {
             namingService.subscribe(serviceName, event -> {
                 if (event instanceof NamingEvent){
-                    final List<Instance> instances = ((NamingEvent) event).getInstances();
+                    List<Instance> instances = ((NamingEvent) event).getInstances();
                     if (instances == null || instances.isEmpty()){
                         serviceInstanceCache.remove(serviceName);
                     }else{
@@ -83,14 +80,14 @@ public class NacosRegistry implements Registry {
     public InetSocketAddress lookupServiceAddress(String serviceName) {
         try {
             List<InetSocketAddress> addresses = getServiceAddress(serviceName);
-            return loadBalance.selectServiceAddress(addresses);
+            return loadBalance.selectServiceAddress(addresses, serviceName);
         } catch (NacosException e) {
            throw new RpcException("服务发现时出错");
         }
     }
 
     private List<InetSocketAddress> getServiceAddress(String serviceName) throws NacosException {
-        final List<Instance> instances;
+        List<Instance> instances;
         if (serviceInstanceCache.get(serviceName) != null){
             instances = serviceInstanceCache.get(serviceName);
         }else {

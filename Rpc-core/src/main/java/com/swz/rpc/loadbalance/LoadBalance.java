@@ -9,5 +9,12 @@ import java.util.List;
  */
 public interface LoadBalance {
 
-    InetSocketAddress selectServiceAddress(List<InetSocketAddress> serviceAddress);
+    /**
+     * 选择一个服务地址
+     *
+     * @param serviceAddress 服务地址列表
+     * @param serviceName    服务名
+     * @return 服务地址
+     */
+    InetSocketAddress selectServiceAddress(List<InetSocketAddress> serviceAddress, String serviceName);
 }

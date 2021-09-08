@@ -1,1 +1,1 @@
-com.swz.rpc.loadbalance.RoundLoadBalance
+com.swz.rpc.loadbalance.impl.ConsistentHashLoadBalance

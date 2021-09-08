@@ -4,7 +4,7 @@
 
 RPC（Remote Procedure Call）全称远程过程调用，简而言之就是像调用本地方法一样调用远程服务，整个过程用户是无感知的。
 
-一款分布式RPC框架离不开三个基本要素：
+一款分布式RPC框架离不开三个基本组件：
 
 * 服务提供方（Service Provider）
 * 服务消费方（Service Consumer）
@@ -24,13 +24,23 @@ RPC（Remote Procedure Call）全称远程过程调用，简而言之就是像�
 
   客户端需要有从注册中心获取服务的基本能力，它需要在应用启动时，扫描依赖的RPC服务，并为其生成代理调用对象，同时从注册中心拉取服务元数据存入本地缓存，然后发起监听各服务的变动做到及时更新缓存。在发起服务调用时，通过代理调用对象，从本地缓存中获取服务地址列表，然后选择一种负载均衡策略筛选出一个目标地址发起调用。调用时会对请求数据进行序列化，并采用一种约定的通信协议进行socket通信。
 
+## 一次调用流程
+
+1. 服务端在启动后，会将它提供的服务列表发布到注册中心，客户端向注册中心订阅服务地址；
+2. 客户端为服务生成代理，通过代理对象调用服务端，代理对象将方法、参数等数据转化为网络字节流；
+3. 客户端根据负载均衡策略从服务列表中选取其中一个的服务地址，并将数据通过网络发送给服务端；
+4. 服务端接收到数据后进行解码，得到请求信息；
+5. 服务端根据解码后的请求信息反射调用对应的服务，然后将调用结果返回给客户端。
+
 ## 特性
 
 1. IO通信框架 ：本实现支持Netty和Socket两种通信框架。
 
 2. 消费端如采用 Netty 方式，会复用 Channel 避免多次连接
 
-3. 如消费端和提供者都采用 Netty 方式，会采用 Netty 的心跳机制进行空闲检测，解决**连接假死**问题
+3. 实现简单容器，在容器启动时扫描加了@RpcService和@RpcComponent注解的类注册为Bean，将加了@RpcService注解的bean注册到注册中心中，对加了@RpcAutowired注解的属性完成依赖注入
+
+4. 如消费端和提供者都采用 Netty 方式，会采用 Netty 的心跳机制进行空闲检测，解决**连接假死**问题
 
    连接假死原因
 
@@ -47,7 +57,9 @@ RPC（Remote Procedure Call）全称远程过程调用，简而言之就是像�
 
    客户端解决：客户端可以定时向服务器端发送数据，只要这个时间间隔小于服务器定义的空闲检测的时间间隔，那么就能防止前面提到的误判
 
-4. 通信协议
+5. 实现断线重连，支持指数退避、线性退避和随机退避三种重试策略。
+
+6. 通信协议
 
    因为TCP是基于流的传输协议，消息没有边界，如果不通过通信协议来传输，会产生**粘包**、**半包**问题
 
@@ -76,15 +88,15 @@ RPC（Remote Procedure Call）全称远程过程调用，简而言之就是像�
    * 第8个字节是填充 无意义
    * 紧接着4个字节是内容长度 即此四个字节后面此长度的内容是消息content。
 
-5. 实现简单容器，在容器启动时扫描加了@RpcService和@RpcComponent注解的类注册为Bean，将加了@RpcService注解的bean注册到注册中心中，对加了@RpcAutowired注解的属性完成依赖注入
+7. 通过CompletableFuture与请求ID结合实现全双工通信
 
-6. 通过Promise与请求ID结合实现全双工通信
+8. 序列化协议 本实现支持JDK、JSON和Hessian序列化协议	
 
-7. 序列化协议 本实现支持JDK和JSON序列化协议	
+9. 负载均衡 本实现支持一致性哈希、随机和轮询三种策略。
 
-8. 负载均衡 本实现支持随机和轮询两种策略。
+10. 注册中心 本实现选用Nacos作为注册中心。
 
-9. 注册中心 本实现选用Nacos作为注册中心。
+
 
 ## 实现
 
@@ -216,17 +228,26 @@ public class ServerHandler extends SimpleChannelInboundHandler<Message> {
 客户端复用Channel，发送请求时从注册中心找到服务地址，如果已经有与该地址连接的Channel则复用该Channel，如果没有则建立连接，
 
 ```java
+/**
+ * @author 向前走不回头
+ * @date 2021/7/24
+ */
+@Slf4j
 public class NettyClient implements RpcTransport {
 
     private final Bootstrap bootstrap;
     private final Registry registry;
     private final ChannelProvider channelProvider;
+    private final RetryPolicy retryPolicy;
+    private final NioEventLoopGroup group;
 
     public NettyClient() {
-        registry = NacosRegistry.getInstance();
+        registry = ServiceLoader.load(Registry.class).iterator().next();
         channelProvider = ChannelProvider.getInstance();
+        retryPolicy = new ExponentialBackOffRetry(1000, 3, 60 * 1000);
+        ReconnectHandler reconnectHandler = new ReconnectHandler(this);
         bootstrap = new Bootstrap();
-        NioEventLoopGroup group = new NioEventLoopGroup();
+        group = new NioEventLoopGroup();
         bootstrap.group(group)
                 .channel(NioSocketChannel.class)
 //                连接超时时间5毫秒
@@ -236,6 +257,7 @@ public class NettyClient implements RpcTransport {
                     @Override
                     protected void initChannel(NioSocketChannel ch) throws Exception {
                         ch.pipeline()
+                                .addLast(reconnectHandler)
 //                              // 用来判断是不是 读空闲时间过长，或 写空闲时间过长
 //                              20秒内如果没有向服务器写数据，会触发一个 IdleState#WRITER_IDLE 事件
                                 .addLast(new IdleStateHandler(0, 20, 0, TimeUnit.SECONDS))
@@ -245,21 +267,29 @@ public class NettyClient implements RpcTransport {
                                 .addLast(new MessageCodec())
 //                                客户端处理器
                                 .addLast(new ClientHandler());
+
                     }
                 });
     }
 
-    private Channel doConnect(InetSocketAddress inetSocketAddress) throws ExecutionException, InterruptedException {
+    public CompletableFuture<Channel> doConnect(InetSocketAddress inetSocketAddress) throws ExecutionException, InterruptedException {
         CompletableFuture<Channel> completableFuture = new CompletableFuture<>();
-        bootstrap.connect(inetSocketAddress).addListener((ChannelFutureListener) future -> {
+        ChannelFuture channelFuture = bootstrap.connect(inetSocketAddress);
+        channelFuture.addListener((ChannelFutureListener) future -> {
             if (future.isSuccess()) {
                 log.debug("与服务端{}建立连接成功", inetSocketAddress.toString());
                 completableFuture.complete(future.channel());
             } else {
-                throw new IllegalStateException();
+//                失败 触发inactive再次重试 
+//                这里由于重试产生的新的Channel无法得到要连接的地址 所以使用AttributeKey将地址作为附件传递过去
+                if (!future.channel().hasAttr(AttributeKey.valueOf("address"))) {
+                    Attribute<InetSocketAddress> address = future.channel().attr(AttributeKey.valueOf("address"));
+                    address.set(inetSocketAddress);
+                }
+                future.channel().pipeline().fireChannelInactive();
             }
         });
-        return completableFuture.get();
+        return completableFuture;
     }
 
     public Channel getChannel(InetSocketAddress address) {
@@ -270,11 +300,11 @@ public class NettyClient implements RpcTransport {
         } else {
 //            缓存中找不到 建立连接 放入缓存
             try {
-                channel = doConnect(address);
+                CompletableFuture<Channel> future = doConnect(address);
+                channel = future.get();
                 channelProvider.put(address, channel);
             } catch (ExecutionException | InterruptedException e) {
-                e.printStackTrace();
-                log.error("获取Channel时出错");
+                log.error("获取Channel时出错{}", e.getMessage());
             }
         }
         return channel;
@@ -284,56 +314,61 @@ public class NettyClient implements RpcTransport {
     public Object sendRpcRequest(RequestMessage requestMessage) {
 //        从注册中心找到服务地址
         InetSocketAddress address = registry.lookupServiceAddress(requestMessage.getInterfaceName());
-//        找到channel
+        if (address == null) {
+            throw new RpcException("未找到服务地址");
+        }
+        //        找到channel
         Channel channel = getChannel(address);
         log.debug("channel{}", channel.toString());
         if (channel.isActive()) {
-            DefaultPromise<Object> promise = new DefaultPromise<>(channel.eventLoop());
-            UnProcessRequest.getInstance().put(requestMessage.getRequestId(), promise);
+            CompletableFuture<Object> future = new CompletableFuture<>();
+            UnProcessRequest.getInstance().put(requestMessage.getRequestId(), future);
             channel.writeAndFlush(requestMessage).addListener((ChannelFutureListener) channelFuture -> {
                 if (channelFuture.isSuccess()) {
                     log.debug("client send message: [{}]", requestMessage);
                 } else {
                     channelFuture.channel().close();
-                    promise.setFailure(channelFuture.cause());
+                    future.completeExceptionally(channelFuture.cause());
                     log.error("Send failed:", channelFuture.cause());
                 }
             });
-            try {
-                promise.await();
-            } catch (InterruptedException e) {
-                throw new RpcException("等待远程调用结果时异常 " + e.getMessage());
-            }
-            if (promise.isSuccess()) {
-//                调用正常
-                return promise.getNow();
-            } else {
-//                调用异常
-                throw new RpcException(promise.cause());
-            }
+            return future;
         } else {
             throw new IllegalStateException();
         }
+    }
+
+    public RetryPolicy getRetryPolicy() {
+        return retryPolicy;
+    }
+
+    public void close() {
+        group.shutdownGracefully();
     }
 }
 ```
 
 ```java
+
+/**
+ * @author 向前走不回头
+ * @date 2021/7/24
+ */
 @Slf4j
 public class ClientHandler extends SimpleChannelInboundHandler<Message> {
     @Override
     protected void channelRead0(ChannelHandlerContext ctx, Message msg) throws Exception {
-        if (msg.getMessageType() == Message.RPC_MESSAGE_TYPE_RESPONSE){
+        if (msg.getMessageType() == Message.RPC_MESSAGE_TYPE_RESPONSE) {
             ResponseMessage responseMessage = (ResponseMessage) msg;
             String requestId = responseMessage.getRequestId();
-//            通过requestID得到promise 将结果放入promise容器中
-            final Promise<Object> promise = UnProcessRequest.getInstance().remove(requestId);
+//            通过requestID得到CompletableFuture 将结果放入future容器中
+            CompletableFuture<Object> future = UnProcessRequest.getInstance().remove(requestId);
             if (responseMessage.getExceptionValue() == null) {
-//               成功 将结果放入promise中
-                promise.setSuccess(responseMessage.getReturnValue());
-            }else {
-//                失败 将异常对象放入promise中
-                promise.setFailure(responseMessage.getExceptionValue());
+//               成功 将结果放入CompletableFuture中
+                future.complete(responseMessage.getReturnValue());
+            } else {
+//                失败 将异常对象放入CompletableFuture中
+                future.completeExceptionally(responseMessage.getExceptionValue());
             }
         }else if (msg.getMessageType() == Message.PONG_MESSAGE) {
             log.debug("heart beat");
@@ -344,7 +379,7 @@ public class ClientHandler extends SimpleChannelInboundHandler<Message> {
     @Override
     public void userEventTriggered(ChannelHandlerContext ctx, Object evt) throws Exception {
         if (evt instanceof IdleStateEvent) {
-            if (((IdleStateEvent) evt).state() == IdleState.WRITER_IDLE){
+            if (((IdleStateEvent) evt).state() == IdleState.WRITER_IDLE) {
 //                写空闲 发送一个ping 命令
                 ctx.writeAndFlush(new PingMessage()).addListener(ChannelFutureListener.CLOSE_ON_FAILURE);
                 log.debug("write idle happened");
@@ -353,8 +388,85 @@ public class ClientHandler extends SimpleChannelInboundHandler<Message> {
             super.userEventTriggered(ctx, evt);
         }
     }
+
+    @Override
+    public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
+        log.error("client catch exception：{}", cause.getMessage());
+        ctx.close();
+    }
 }
 ```
+
+```java
+/**
+ * @author 向前走不回头
+ * @date 2021/8/28
+ */
+@Slf4j
+@ChannelHandler.Sharable
+public class ReconnectHandler extends ChannelInboundHandlerAdapter {
+
+    private int retries = 0;
+    private RetryPolicy retryPolicy;
+    private HashedWheelTimer timer;
+    private final NettyClient nettyClient;
+
+    public ReconnectHandler(NettyClient nettyClient) {
+        this.nettyClient = nettyClient;
+        timer = new HashedWheelTimer();
+    }
+
+    @Override
+    public void channelActive(ChannelHandlerContext ctx) throws Exception {
+        log.debug("Successfully established a connection to the server.");
+        retries = 0;
+        ctx.fireChannelActive();
+    }
+
+    @Override
+    public void channelInactive(ChannelHandlerContext ctx) throws Exception {
+        if (retries == 0) {
+            log.error("Lost the TCP connection with the server.");
+            ctx.close();
+        }
+        boolean allowRetry = getRetryPolicy().allowRetry(retries);
+        if (allowRetry) {
+            long sleepTimeMs = getRetryPolicy().getSleepTimeMs(retries);
+            ++retries;
+            log.debug("Try to reconnect to the server after {}ms. Retry count: {}.", sleepTimeMs, retries);
+            timer.newTimeout((timeout) -> {
+                log.debug("Reconnecting ...");
+                InetSocketAddress address;
+                if (ctx.channel().remoteAddress() != null) {
+                    address = (InetSocketAddress) ctx.channel().remoteAddress();
+                } else {
+                    Attribute<InetSocketAddress> attr = ctx.channel().attr(AttributeKey.valueOf("address"));
+                    address = attr.get();
+                }
+                try {
+                    nettyClient.doConnect(address);
+                } catch (ExecutionException | InterruptedException e) {
+                    log.debug("建立连接时失败: {}", e.getMessage());
+                }
+            }, sleepTimeMs, TimeUnit.MILLISECONDS);
+        } else {
+            nettyClient.close();
+            timer.stop();
+        }
+        ctx.fireChannelInactive();
+    }
+
+    private RetryPolicy getRetryPolicy() {
+        if (retryPolicy == null) {
+            retryPolicy = nettyClient.getRetryPolicy();
+        }
+        return retryPolicy;
+    }
+}
+
+```
+
+
 
 自定义协议编解码器
 
@@ -540,26 +652,21 @@ public interface HelloService {
 ```
 
 ```java
+
 @RpcService
 public class HelloServiceImpl implements HelloService {
     @Override
     public String say(String name) {
-//        int i = 1/0;
+//        int i = 1 / 0;
+        try {
+            Thread.sleep(2000);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
         return "hello " + name;
     }
 }
-```
 
-```java
-@RpcComponent
-public class HelloController {
-    @RpcAutowired
-    HelloService helloService;
-
-    public void test(String name) {
-        System.out.println(helloService.say(name));
-    }
-}
 ```
 
 ```java
@@ -624,4 +731,6 @@ public class HelloController {
   ~~2.整合Spring，在spring启动时扫描加了@RpcService和@RpcComponent注解的类注册为Bean通过spring的SpringBeanPostProcessor将加了@RpcService注解的bean注册到注册中心中，对加了@RpcResource注解的属性完成依赖注入~~
 
 - [x] 3.引入SPI机制解耦
+
+- [ ] 4.实现容错机制，如故障转移、快速失败、安全失败等。
 

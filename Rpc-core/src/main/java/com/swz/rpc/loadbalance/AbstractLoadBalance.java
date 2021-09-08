@@ -9,15 +9,15 @@ import java.util.List;
  */
 public abstract class AbstractLoadBalance implements LoadBalance{
     @Override
-    public InetSocketAddress selectServiceAddress(List<InetSocketAddress> serviceAddress) {
+    public InetSocketAddress selectServiceAddress(List<InetSocketAddress> serviceAddress, String serviceName) {
         if (serviceAddress == null || serviceAddress.size() == 0) {
             return null;
         }
         if (serviceAddress.size() == 1) {
             return serviceAddress.get(0);
         }
-        return doSelect(serviceAddress);
+        return doSelect(serviceAddress, serviceName);
     }
 
-    public abstract InetSocketAddress doSelect(List<InetSocketAddress> serviceAddress);
+    public abstract InetSocketAddress doSelect(List<InetSocketAddress> serviceAddress, String serviceName);
 }

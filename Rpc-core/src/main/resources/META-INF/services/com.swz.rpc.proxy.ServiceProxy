@@ -1,1 +1,1 @@
-com.swz.rpc.proxy.cglib.CglibServiceProxy
+com.swz.rpc.proxy.impl.CglibServiceProxy

@@ -1,6 +1,7 @@
-package com.swz.rpc.serializer;
+package com.swz.rpc.serializer.impl;
 
 import com.google.gson.*;
+import com.swz.rpc.serializer.Serializer;
 
 import java.lang.reflect.Type;
 import java.nio.charset.StandardCharsets;
@@ -9,17 +10,23 @@ import java.nio.charset.StandardCharsets;
  * @author 向前走不回头
  * @date 2021/7/23
  */
-public class JsonSerializer implements Serializer{
+public class JsonSerializer implements Serializer {
     @Override
     public <T> byte[] serialize(T object) {
-        final Gson gson = new GsonBuilder().registerTypeAdapter(Class.class, new ClassCodec()).create();
+        if (object == null) {
+            throw new NullPointerException();
+        }
+        Gson gson = new GsonBuilder().registerTypeAdapter(Class.class, new ClassCodec()).create();
         return gson.toJson(object).getBytes(StandardCharsets.UTF_8);
     }
 
     @Override
     public <T> T deserialize(Class<T> clazz, byte[] bytes) {
-        final Gson gson = new GsonBuilder().registerTypeAdapter(Class.class, new ClassCodec()).create();
-        return gson.fromJson(new String(bytes,StandardCharsets.UTF_8),clazz);
+        if (bytes == null) {
+            throw new NullPointerException();
+        }
+        Gson gson = new GsonBuilder().registerTypeAdapter(Class.class, new ClassCodec()).create();
+        return gson.fromJson(new String(bytes, StandardCharsets.UTF_8), clazz);
     }
     static class ClassCodec implements com.google.gson.JsonSerializer<Class<?>>, JsonDeserializer<Class<?>> {
 

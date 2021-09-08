@@ -7,8 +7,6 @@ import com.swz.rpc.pojo.Message;
 import com.swz.rpc.pojo.PongMessage;
 import com.swz.rpc.pojo.RequestMessage;
 import com.swz.rpc.pojo.ResponseMessage;
-import com.swz.rpc.registry.Registry;
-import com.swz.rpc.registry.nacos.NacosRegistry;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
@@ -76,7 +74,7 @@ public class ServerHandler extends SimpleChannelInboundHandler<Message> {
             if (state == IdleState.READER_IDLE){
 //        客户端30秒内未发送请求  关闭连接
                 log.debug("客户端30秒内未发送请求 关闭连接");
-                ctx.close();
+                ctx.channel().close();
             }
         }
         super.userEventTriggered(ctx, evt);
@@ -84,8 +82,7 @@ public class ServerHandler extends SimpleChannelInboundHandler<Message> {
 
     @Override
     public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
-        log.error("server catch exception：", cause);
-        cause.printStackTrace();
+        log.error("server catch exception：{}", cause.getMessage());
         ctx.close();
     }
 }

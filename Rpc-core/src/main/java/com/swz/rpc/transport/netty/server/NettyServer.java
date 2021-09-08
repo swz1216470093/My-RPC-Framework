@@ -1,31 +1,20 @@
 package com.swz.rpc.transport.netty.server;
 
-import com.swz.rpc.annotation.RpcService;
 import com.swz.rpc.config.RpcConfig;
-import com.swz.rpc.registry.Registry;
-import com.swz.rpc.registry.nacos.NacosRegistry;
 import com.swz.rpc.transport.RpcServer;
 import com.swz.rpc.transport.netty.handler.ServerHandler;
-import com.swz.rpc.transport.netty.protocol.ProtocolDecoder;
 import com.swz.rpc.transport.netty.protocol.MessageCodec;
+import com.swz.rpc.transport.netty.protocol.ProtocolDecoder;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.ChannelOption;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.channel.socket.nio.NioSocketChannel;
-import io.netty.handler.logging.LogLevel;
-import io.netty.handler.logging.LoggingHandler;
 import io.netty.handler.timeout.IdleStateHandler;
 import io.netty.util.concurrent.DefaultEventExecutorGroup;
 import lombok.extern.slf4j.Slf4j;
-import org.reflections.Reflections;
 
-import java.lang.reflect.Constructor;
-import java.net.InetAddress;
-import java.net.InetSocketAddress;
-import java.net.UnknownHostException;
-import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -34,6 +23,7 @@ import java.util.concurrent.TimeUnit;
  */
 @Slf4j
 public class NettyServer implements RpcServer {
+    @Override
     public void start(){
         NioEventLoopGroup boss = new NioEventLoopGroup();
         NioEventLoopGroup worker = new NioEventLoopGroup();

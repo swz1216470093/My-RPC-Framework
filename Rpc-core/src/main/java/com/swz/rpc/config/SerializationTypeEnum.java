@@ -1,9 +1,10 @@
 package com.swz.rpc.config;
 
 import com.swz.rpc.exception.RpcException;
-import com.swz.rpc.serializer.JdkSerializer;
-import com.swz.rpc.serializer.JsonSerializer;
 import com.swz.rpc.serializer.Serializer;
+import com.swz.rpc.serializer.impl.HessianSerializer;
+import com.swz.rpc.serializer.impl.JdkSerializer;
+import com.swz.rpc.serializer.impl.JsonSerializer;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 
@@ -20,8 +21,11 @@ public enum SerializationTypeEnum {
     /**
      * Json序列化
      */
-    JSON((byte) 0x02, "json");
-
+    JSON((byte) 0x02, "json"),
+    /**
+     * Hessian序列化
+     */
+    HESSIAN((byte) 0x03, "hessian");
     private final byte code;
     private final String name;
 
@@ -38,8 +42,10 @@ public enum SerializationTypeEnum {
     public static Serializer getSerializer(String name){
         if ("jdk".equals(name)){
             return new JdkSerializer();
-        }else if ("json".equals(name)){
+        }else if ("json".equals(name)) {
             return new JsonSerializer();
+        } else if ("hessian".equals(name)) {
+            return new HessianSerializer();
         }
         throw new RpcException("找不到序列化器");
     }
